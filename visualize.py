@@ -1,15 +1,3 @@
-"""
-Plotting utilities for the thesis simulation — presentation-quality figures.
-
-Produces:
-  * reward_curve.png        — training reward over episodes (with smoothing)
-  * training_summary.png    — return, coverage, losses, entropy in a 2x2 panel
-  * paths_comparison.png    — MAPPO+MPC vs MAPPO-only paths with ideal lanes
-  * coverage_heatmap.png    — side-by-side sprayed cells (MPC vs MAPPO-only)
-  * coverage_detail.png     — detailed spray intensity map for MAPPO+MPC
-  * comparison_metrics.png  — bar chart comparing key metrics (thesis figure)
-  * parameter_sweep.png     — effect of parameters on coverage/return
-"""
 
 import os
 import numpy as np
@@ -43,43 +31,29 @@ def _smooth(x, w=20):
     return np.concatenate([pad, sm])
 
 
-# ============================================================================
-# Garden drawing helpers
-# ============================================================================
-
+# drawing the garden with thet trees and indicating the tree region
 def _draw_garden(ax, env, trees, draw_region_line=True):
-    """Draw garden boundary, trees, and optional region divider."""
-    ax.add_patch(Rectangle((0, 0), env.size, env.size, fill=False,
-                           edgecolor="black", linewidth=2.0))
+    ax.add_patch(Rectangle((0, 0), env.size, env.size,edgecolor="black", linewidth=2.0))  # draws the garden starting from  (0,0) as the bottom left and extents it to the size of the garden (50x 50 m)
     if draw_region_line:
-        ax.axvline(env.size / 2, linestyle="--", color="gray", alpha=0.6,
-                   linewidth=1.2)
+        ax.axvline(env.size / 2, linestyle="--", color="gray", alpha=0.6, linewidth=1.2) # vertical line dividing the garden into half at 25m
     for (tx, ty) in trees:
-        ax.add_patch(Circle((tx, ty), env.tree_radius, color="forestgreen",
-                            alpha=0.5, zorder=2))
-        ax.add_patch(Circle((tx, ty), env.tree_radius, fill=False,
-                            edgecolor="darkgreen", linewidth=1.5, zorder=2))
-        ax.add_patch(Circle((tx, ty), env.tree_radius + 0.3, fill=False,
-                            edgecolor="red", linewidth=0.6, linestyle=":",
-                            alpha=0.3, zorder=2))
-    ax.set_xlim(-2, env.size + 2)
-    ax.set_ylim(-2, env.size + 2)
+        ax.add_patch(Circle((tx, ty), env.tree_radius, color="forestgreen", alpha=0.5, zorder=2)) # tree position and shading it green
+        ax.add_patch(Circle((tx, ty), env.tree_radius,edgecolor="darkgreen", linewidth=1.5, zorder=2)) # tree boundary
+        ax.add_patch(Circle((tx, ty), env.tree_radius + 0.3,edgecolor="red", linewidth=0.6, linestyle=":",alpha=0.3, zorder=2)) # tree margins
+    ax.set_xlim(-2, env.size + 2) # horizontal limits
+    ax.set_ylim(-2, env.size + 2) # vertical limits
     ax.set_aspect("equal")
     ax.set_xlabel("x (m)")
     ax.set_ylabel("y (m)")
 
-
-def _draw_ideal_lanes(ax, ideal_lanes, colors=["steelblue", "indianred"]):
-    """Draw the ideal straight boustrophedon lane lines as dashed lines."""
-    for i, lanes in enumerate(ideal_lanes):
+ # For the ideal straight boustrophedon lane lines as dashed lines.
+def _draw_ideal_lanes(ax, ideal_lanes, colors=["steelblue", "indianred"]):    # Contains all lane segments for all drones steelblue for drone 1 and indianred for drone 2
+    for i, lanes in enumerate(ideal_lanes): 
         for lane in lanes:
-            ax.plot([lane[0, 0], lane[1, 0]], [lane[0, 1], lane[1, 1]],
-                    color=colors[i], linewidth=0.7, linestyle="--", alpha=0.35)
+            ax.plot([lane[0, 0], lane[1, 0]], [lane[0, 1], lane[1, 1]], color=colors[i], linewidth=0.7, linestyle="--", alpha=0.35)
 
 
-# ============================================================================
-# Training plots
-# ============================================================================
+# This part contains the curves obtained from the training 
 
 def plot_reward_curve(history_npz_path: str, out_path: str):
     H = np.load(history_npz_path)
@@ -142,52 +116,29 @@ def plot_training_summary(history_npz_path: str, out_path: str):
     plt.close(fig)
 
 
-# ============================================================================
+
 # Path / coverage plots
-# ============================================================================
 
 def plot_paths_comparison(results: dict, env, out_path: str, episode_idx: int = 0):
     """Side-by-side: MAPPO+MPC vs MAPPO-only drone paths."""
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
-    for ax, key, title in zip(
-        axes, ["with_mpc", "without_mpc"],
-        ["MAPPO + MPC (Hybrid)", "MAPPO Only"]
-    ):
+    for ax, key, title in zip(axes, ["with_mpc", "without_mpc"], ["MAPPO + MPC (Hybrid)", "MAPPO Only"] ):
         r = results[key][episode_idx]
         _draw_garden(ax, env, r["trees"])
-
         if "ideal_lanes" in r:
             _draw_ideal_lanes(ax, r["ideal_lanes"])
-
         colors = ["tab:blue", "tab:red"]
         labels = ["Drone 0 (left region)", "Drone 1 (right region)"]
         for i in range(2):
             path = r["paths"][i]
-            ax.plot(path[:, 0], path[:, 1], color=colors[i], linewidth=1.5,
-                    alpha=0.85, label=labels[i], zorder=3)
-            ax.scatter(path[0, 0], path[0, 1], color=colors[i], marker="o",
-                      s=80, edgecolor="black", zorder=5)
-            ax.scatter(path[-1, 0], path[-1, 1], color=colors[i], marker="*",
-                      s=180, edgecolor="black", zorder=5)
+            ax.plot(path[:, 0], path[:, 1], color=colors[i], linewidth=1.5, alpha=0.85, label=labels[i], zorder=3)
+            ax.scatter(path[0, 0], path[0, 1], color=colors[i], marker="o", s=80, edgecolor="black", zorder=5)
+            ax.scatter(path[-1, 0], path[-1, 1], color=colors[i], marker="*",s=180, edgecolor="black", zorder=5)
 
         cov_val = r.get('coverage', 0.0)
         coll = r.get('tree_collisions', 0)
-        ax.set_title(f"{title}\nCoverage={cov_val:.1%}, Collisions={coll}, Steps={r['length']}",
-                     fontsize=12, fontweight='bold')
-
-        custom_handles = [
-            Line2D([0], [0], color=colors[0], linewidth=1.8, label="Drone 0 path"),
-            Line2D([0], [0], color=colors[1], linewidth=1.8, label="Drone 1 path"),
-            Line2D([0], [0], color="gray", linewidth=0.8, linestyle="--",
-                   alpha=0.5, label="Ideal boustrophedon lanes"),
-            Line2D([0], [0], marker="o", color="w", markerfacecolor="gray",
-                   markersize=8, label="Start"),
-            Line2D([0], [0], marker="*", color="w", markerfacecolor="gray",
-                   markersize=12, label="End"),
-        ]
-        ax.legend(handles=custom_handles, loc="upper left", fontsize=8)
-
+        ax.set_title(f"{title}\nCoverage={cov_val:.1%}, Collisions={coll}, Steps={r['length']}",fontsize=12, fontweight='bold')
     fig.suptitle("Drone Paths in 50x50 m Garden — 6 Lanes per Region, 8 Trees\n"
                  "Dashed = ideal boustrophedon lanes | Solid = actual path",
                  y=1.02, fontsize=13, fontweight='bold')
@@ -196,15 +147,9 @@ def plot_paths_comparison(results: dict, env, out_path: str, episode_idx: int = 
     plt.close(fig)
 
 
-def plot_coverage_heatmap(results: dict, env, out_path: str, episode_idx: int = 0):
-    """Side-by-side coverage heatmaps: MAPPO+MPC vs MAPPO-only.
-
-    This is the KEY presentation figure for the thesis.
-    """
+def plot_coverage_heatmap(results: dict, env, out_path: str, episode_idx: int = 0): 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-
-    cov_cmap = LinearSegmentedColormap.from_list(
-        "coverage", ["#f7fbff", "#c7e9c0", "#74c476", "#31a354", "#006d2c"]
+    cov_cmap = LinearSegmentedColormap.from_list("coverage", ["#f7fbff", "#c7e9c0", "#74c476", "#31a354", "#006d2c"]
     )
 
     for ax, key, title in zip(
@@ -242,12 +187,6 @@ def plot_coverage_heatmap(results: dict, env, out_path: str, episode_idx: int = 
 
         cov_val = grid.mean()
         coll = r.get('tree_collisions', 0)
-    #     ax.set_title(f"{title}\nCoverage = {cov_val:.1%} | Tree Collisions = {coll}",
-    #                  fontsize=13, fontweight='bold')
-
-    # fig.suptitle("Garden Coverage Heatmap — 50x50 m, 8 Trees, 6 Lanes per Region\n"
-    #              "Green = Sprayed | White = Unsprayed | Dashed = Boustrophedon Lanes",
-    #              y=1.02, fontsize=13, fontweight='bold')
     fig.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -274,14 +213,10 @@ def plot_coverage_detail(results: dict, env, out_path: str, episode_idx: int = 0
 
     grid = intensity_norm.reshape(env.grid_res, env.grid_res)
 
-    detail_cmap = LinearSegmentedColormap.from_list(
-        "detail", ["#ffffff", "#e0f3db", "#a8ddb5", "#4eb3d3", "#2b8cbe", "#08589e"]
-    )
-
+    
     fig, ax = plt.subplots(figsize=(9, 8))
     extent = (0, env.size, 0, env.size)
-    im = ax.imshow(grid, origin="lower", extent=extent, cmap=detail_cmap,
-                   vmin=0, vmax=1, aspect="equal", alpha=0.9)
+    im = ax.imshow(grid, origin="lower", extent=extent,vmin=0, vmax=1, aspect="equal", alpha=0.9)
 
     _draw_garden(ax, env, r["trees"])
 
@@ -300,10 +235,6 @@ def plot_coverage_detail(results: dict, env, out_path: str, episode_idx: int = 0
 
     cov_frac = r.get('coverage', 0.0)
     mpc_used = r.get('mpc_used', 0)
-    # ax.set_title(f"MAPPO + MPC — Spray Intensity Map\n"
-    #              f"Coverage = {cov_frac:.1%} | Steps = {r['length']} | MPC Activations = {mpc_used}",
-    #              fontsize=12, fontweight='bold')
-
     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     cbar.set_label("Spray intensity (normalized)", fontsize=10)
 
@@ -313,11 +244,6 @@ def plot_coverage_detail(results: dict, env, out_path: str, episode_idx: int = 0
 
 
 def plot_comparison_metrics(results: dict, out_path: str):
-    """Bar chart comparing key metrics between MAPPO+MPC and MAPPO-only.
-
-    This is the THESIS COMPARISON FIGURE showing the clear advantage of
-    the hybrid MAPPO+MPC approach over MAPPO alone.
-    """
     mpc_covs = [r["coverage"] for r in results["with_mpc"]]
     no_covs = [r["coverage"] for r in results["without_mpc"]]
     mpc_colls = [r["tree_collisions"] for r in results["with_mpc"]]
@@ -363,7 +289,6 @@ def plot_comparison_metrics(results: dict, out_path: str):
     ax.set_xticks(x)
     ax.set_xticklabels(["MAPPO + MPC", "MAPPO Only"])
     ax.set_ylabel("Tree Collisions")
-    #ax.set_title("Safety (Tree Collisions)", fontweight='bold', fontsize=13)
     ax.grid(alpha=0.3, axis="y")
     for bar in bars:
         h = bar.get_height()
@@ -373,33 +298,21 @@ def plot_comparison_metrics(results: dict, out_path: str):
 
     # Return comparison
     ax = axes[2]
-    bars = ax.bar(x, [np.mean(mpc_rets), np.mean(no_rets)], 0.5,
-                  yerr=[np.std(mpc_rets), np.std(no_rets)],
-                  color=["#2b8cbe", "#e34a33"], edgecolor="black", linewidth=0.5,
-                  capsize=5)
+    bars = ax.bar(x, [np.mean(mpc_rets), np.mean(no_rets)], 0.5,yerr=[np.std(mpc_rets), np.std(no_rets)],
+                  color=["#2b8cbe", "#e34a33"], edgecolor="black", linewidth=0.5, capsize=5)
     ax.set_xticks(x)
     ax.set_xticklabels(["MAPPO + MPC", "MAPPO Only"])
     ax.set_ylabel("Episode Return")
-   # ax.set_title("Cumulative Reward", fontweight='bold', fontsize=13)
     ax.grid(alpha=0.3, axis="y")
     for bar in bars:
         h = bar.get_height()
         ax.annotate(f'{h:.0f}', xy=(bar.get_x() + bar.get_width() / 2, h),
                    xytext=(0, 5), textcoords="offset points",
-                   ha='center', va='bottom', fontsize=11, fontweight='bold')
-
-    fig.suptitle("MAPPO + MPC vs MAPPO Only — Key Performance Metrics\n"
-                 "Hybrid approach achieves higher coverage, fewer collisions, and greater reward",
-                 y=1.04, fontsize=14, fontweight='bold')
+                   ha='center', va='bottom', fontsize=11, fontweight='bold') 
     fig.tight_layout()
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
-
-
-# ============================================================================
-# Parameter sweep
-# ============================================================================
-
+# Parameter sweep plots
 def plot_parameter_sweep(sweep_results: dict, out_path: str):
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.5))
 
@@ -413,24 +326,18 @@ def plot_parameter_sweep(sweep_results: dict, out_path: str):
     w = 0.38
 
     ax = axes[0]
-    bars1 = ax.bar(x - w / 2, returns_mpc, w, label="MAPPO + MPC",
-                   color="#2b8cbe", edgecolor="black", linewidth=0.5)
-    bars2 = ax.bar(x + w / 2, returns_no, w, label="MAPPO only",
-                   color="#e34a33", edgecolor="black", linewidth=0.5)
+    bars1 = ax.bar(x - w / 2, returns_mpc, w, label="MAPPO + MPC", color="#2b8cbe", edgecolor="black", linewidth=0.5)
+    bars2 = ax.bar(x + w / 2, returns_no, w, label="MAPPO only",color="#e34a33", edgecolor="black", linewidth=0.5)
     ax.set_xticks(x); ax.set_xticklabels(names, rotation=15)
     ax.set_ylabel("Mean return")
-    #ax.set_title("Effect of Parameters on Episode Return", fontweight='bold')
     ax.grid(alpha=0.3, axis="y")
     ax.legend(loc="best")
 
     ax = axes[1]
-    bars1 = ax.bar(x - w / 2, cov_mpc, w, label="MAPPO + MPC",
-                   color="#2b8cbe", edgecolor="black", linewidth=0.5)
-    bars2 = ax.bar(x + w / 2, cov_no, w, label="MAPPO only",
-                   color="#e34a33", edgecolor="black", linewidth=0.5)
+    bars1 = ax.bar(x - w / 2, cov_mpc, w, label="MAPPO + MPC",color="#2b8cbe", edgecolor="black", linewidth=0.5)
+    bars2 = ax.bar(x + w / 2, cov_no, w, label="MAPPO only", color="#e34a33", edgecolor="black", linewidth=0.5)
     ax.set_xticks(x); ax.set_xticklabels(names, rotation=15)
     ax.set_ylabel("Mean coverage fraction")
-    #ax.set_title("Effect of Parameters on Coverage", fontweight='bold')
     ax.set_ylim(0, 1.05)
     ax.grid(alpha=0.3, axis="y")
     ax.legend(loc="best")
